@@ -676,3 +676,97 @@ User requested adding this planning log to the existing research Git repository.
 User additionally authorized including the model if not large. The retained stretch checkpoint contains roughly11MB including optimizer/RNG/exposure history. Exported inference-only `models/crnn_stretch_best.pt` (3645540 bytes, 3.48MiB), SHA-256 9f53c05c66b50b41731655d925783beaebb9b502ad372fd64eb3696ac226598a. Original Drive checkpoint unchanged; source SHA3d0da0f48cc195164cb978ce7a8a47f2007d5939ea53d50de2d6864db632af52. Export retains model tensors, alphabet, explicit stretch preprocessing version, selected step2000, aggregate development metrics, source attribution and model-definition provenance; excludes optimizer/RNG, image data, sample indices and predictions. Reloaded with the existing version-aware model helper and verified every model tensor exactly equals the source. This is not a resumable-training checkpoint. Model definition/helper scripts remain local under the existing publication scope, so loading requires the corresponding local CRNN implementation; the architecture source hash is embedded.
 
 Repository scope now includes12 notebooks, this planning log and one compact inference checkpoint. Added only an exact local allowlist exception for that model file; all datasets, large archives, original checkpoints, environments and supporting scripts remain excluded. No training, new inference/test scoring or original dataset changes occurred.
+
+## 2026-11-14 — Consolidated research handoff
+
+User requested a handoff after next-step discussion. Verified clean research Git status, existing scripts/manifests, current split counts, full and inference checkpoint SHA-256 against recorded values. Created local `HANDOFF_2026-11-14.md`; its complete contents follow so the published log is self-contained. Standalone handoff remains excluded under the existing publication scope. No training, inference, source-data changes, Drive writes or reserved-test scoring in this documentation task.
+
+### Handoff snapshot — 2026-11-14
+
+#### Start here
+
+Continue **word-crop Manchu OCR with the retained CRNN and stretch preprocessing**. The immediate next task is a reproducible crop/transcription review, followed by one controlled augmentation experiment if the audit supports it. Do not restart the dataset search, replace the architecture, or score the reserved test as the first action.
+
+This handoff is based on verified local files and saved completed Colab runs. No training or inference was started during handoff preparation. Live remote runtime availability has not been checked today.
+
+#### Workspace and publication
+
+Workspace: `/Users/chao/Lothlorien/Manchu`. Work from `research/`, reading its `AGENTS.md` and latest `planning_log.md` entries first. Root is not a Git repository; `research/` and `../manchu-OCR/` are separate checkouts. Preserve the latter's existing `generate_images.py` change.
+
+Research remote: `git@github.com:chaotea/manchu-research.git`, branch `main`. Before this handoff, HEAD was `f78f092` (compact model), preceded by `a78a864` (log) and `b37b81f` (notebooks). Published scope: 12 notebooks, planning log, one compact model. Supporting Python modules, requirements, datasets and full training checkpoints remain local/Drive. **A fresh GitHub clone is not a runnable reproduction package.**
+
+Local `.git/info/exclude` allowlists publication paths. `.git/info/attributes` and `.git/notebook_clean.py` remove notebook outputs/attachments in Git copies while preserving local outputs. These safeguards do not transfer to a fresh clone. Do not force-add ignored datasets or scripts without a new user request. This standalone handoff stays local; its contents are also appended to the tracked planning log for publication within the authorized scope.
+
+`../gdrive/` is synced Google Drive. Preserve source datasets/checkpoints and existing runs. Local-to-Drive checksums alone do not prove remote visibility. External tyotakuki/mic7ch/HenryKingCN data and results are not Chao's dataset creation.
+
+#### Authoritative model
+
+Retain the **stretch** arm, not aspect padding or either overfit pilot.
+
+- Full selected training checkpoint: `../gdrive/Manchu-CRNN-Geometry-v1/runs/real_geometry_v1_stretch_cuda_01/best.pt`.
+- Full SHA-256: `3d0da0f48cc195164cb978ce7a8a47f2007d5939ea53d50de2d6864db632af52`.
+- Published inference copy: `models/crnn_stretch_best.pt`, 3,645,540 bytes (3.48 MiB).
+- Inference SHA-256: `9f53c05c66b50b41731655d925783beaebb9b502ad372fd64eb3696ac226598a`.
+- The selected step is 2,000 **continuation** updates from the earlier real-adaptation step5,000 checkpoint. It is not a model trained for only2,000 updates in total. Exported inference weights omit optimizer/RNG and cannot resume training.
+- Architecture: CNN with GroupNorm → two-layer bidirectional LSTM (hidden128) → CTC; lowercase NFC romanization alphabet, blank ID0. Fixed32×320 ink crop/stretch pipeline `gpu_crop32x320_v1`. This recognizes oriented word crops, not full-page layout.
+
+Loading in the existing local research environment (no image/test inference):
+
+```python
+import sys
+sys.path.insert(0, 'experiments')
+from real_geometry_model import load_geometry_model
+model, checkpoint = load_geometry_model('models/crnn_stretch_best.pt')
+```
+
+Use `manchu/bin/python`; environment requirements are in `requirements-research.txt`. Keep preprocessing/checkpoint versions paired. Aspect checkpoints require their version-aware helper; the old stretch-only loader must not silently load them.
+
+#### Completed experiments and conclusions
+
+The broad synthetic CRNN baseline learned successfully. Its older250-image final scored246/250; that final is consumed and is not comparable to current synthetic development as a matched before/after test.
+
+Real adaptation then completed5,000 balanced updates on Colab T4, reaching177/490 handwriting development matches (36.12%). All1,295 handwriting training examples scored1,014 correct (78.30%) for **that step5,000 model**. Do not pair that training score with the later continuation's development as though they came from the same checkpoint.
+
+The latest matched experiment ran2,000 updates per arm on the same T4/PyTorch2.14.1+cu130, common initialization, seed20261106, Adam1e-4, batch24 (eight cursive/eight print/eight synthetic), clip5, development every500. Configurations differ only in preprocessing; sample-order hashes match. Both selected step2,000. Combined runtime7.54minutes excludes staging/setup.
+
+| Development domain | Retained stretch exact | Stretch CER | Aspect-pad exact | Aspect-pad CER |
+| --- | ---: | ---: | ---: | ---: |
+| Cursive |180/490 (36.73%)|606/2,368 (25.59%)|106/490 (21.63%)|46.79%|
+| Historical print |2,836/3,359 (84.43%)|660/20,421 (3.23%)|1,060/3,359 (31.56%)|20.57%|
+| Synthetic |13,249/15,000 (88.33%)|2,871/153,064 (1.88%)|2,287/15,000 (15.25%)|27.16%|
+
+Decision: retain stretch for these pretrained weights. Aspect-pad initially nearly erased recognition, then partially recovered; a short adaptation budget with stretch-trained weights does **not** establish that aspect preservation is intrinsically inferior. Geometry concern alone was insufficient reason to switch. Small-sample memorization gates passed for both pipelines but are not generalization evidence.
+
+Evidence: `research_runs/real_geometry_v1_comparison/{README.md,comparison.json}`; original histories/predictions/checkpoints under the new geometry Drive package. Runners: `experiments/adapt_real_v1.py`, `compare_real_geometry_v1.py`; model helper: `real_geometry_model.py`.
+
+#### Data and evaluation boundaries
+
+Current adaptation protocol: `data/real_adaptation_v1/PROTOCOL.json` and train/development/test_reserved manifests. Counts rechecked today:
+
+| Domain | Training images | Development images | Reserved test |
+| --- | ---: | ---: | ---: |
+| Cursive |1,295|490|475|
+| Historical print |20,303|3,359|—|
+| Synthetic/local fonts |70,793|15,000|—|
+
+Cursive filenames form30 page groups split18/6/6. Collection/page IDs do not verify independent manuscripts or writers. Exact decoded-pixel separation was checked; near duplicates, writer independence, expert transcription correctness and original model source exposure remain unresolved. Historical print validation shares word types with training. Public cursive test files were explicitly repurposed into this exploratory protocol, not retained as their authors' independent tests.
+
+**All475 reserved handwriting examples remain unscored.** Do not use them for galleries, label audits, tuning or early checkpoint comparisons. Metadata/hash handling of shared Parquet containers is not test inference. Prior local synthetic/font finals and the753-image historical test are consumed; do not describe them as untouched. Six earlier V4 train/final pixel duplicates under conflicting labels were discovered; corrections/sensitivity are preserved in the log.
+
+Unified source manifests: `data/manchu_unified_v2/`; original Parquet files: `data/manchu_unified_v1/sources/`. `train_with_cursive.jsonl` has93,356 rows including2,260 handwriting crops (2.42%), but the **actual adaptation training** uses only1,295 after page reservations. ScienceDB images are historical print, not handwriting. Do not merge the reserved cursive subsets back into training during development.
+
+Source search is paused at user's request. Inventory: `references/manchu_source_inventory_2026-11-05.md`; NGSYD/HMW/MHTD access remains unresolved. Scan collections are not labeled OCR datasets. Dataset/font redistribution rights are not fully resolved; do not publish the combined data package.
+
+#### Immediate next task: crop and label review
+
+1. Freeze the retained model/hash above. Use its latest cursive predictions from the completed stretch run, joined to **development only** by source/row_index. Record seed20261114 and selection IDs before exporting images.
+2. Create up to48 review cases: eight correct and eight incorrect from each filename collection (v1, v2 chapter, v2 preface). Current v1 development has only seven correct, so include those seven and record the actual47-case total if the other strata are complete. Do not fabricate balanced counts or substitute reserved-test examples.
+3. Save original source filename/page, row/image hashes, original and normalized labels, prediction, raw crop and actual preprocessed view. Use a separate review sheet with fields for clipping, neighboring ink, crop quality, transcription/transliteration concerns, judgment, reviewer and confidence. Retain original labels; leave expert-only judgments unresolved pending a competent Manchu reader.
+4. Explain source/page/length/familiar-word confounding. Cursive_v1 remains weak (7/69 development correct for current baseline); this alone does not prove labeling or sampling is the cause. Prior diagnostic galleries are useful examples, not completed expert reviews.
+5. Write findings and a recommendation to the planning log. Keep review images under ignored local data/run paths; published notebooks must not embed source images through outputs or attachments.
+
+If audit supports training, preregister one conservative augmentation factor against an unchanged control: common retained initialization, identical data/order/budget/optimizer/selection. Inspect TRAIN-only transformed examples to preserve dots/circles. Define ranges, seed, budget and retention criterion before execution. Test source-balancing separately; do not confound it with augmentation or a new architecture. A pretrained OCR transformer remains a later matched comparison, not the next automatic task.
+
+#### What is not done
+
+No expert label review, augmentation trial, source-balancing trial or transformer comparison has run. Current continuation's complete train-set handwriting accuracy has not been measured. No independent writer/document benchmark has been established. No new final evaluation is authorized by this handoff. Check current UI/runtime and saved artifacts before restarting any notebook; preserve all completed runs and use new names for changed experiments.
